@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigSister - Your Anonymous Support</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <header class="hidden">
+        <nav>
+            <div class="logo">
+                <img src="{{ url_for('static', filename='img/BigSister.png') }}" alt="BigSister Logo">
+                <span id="welcome-user"></span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" data-section="chat-section" data-translate-key="nav_chat">Chat</a></li>
+                <li><a href="#" data-section="journal-section" data-translate-key="nav_journal">Journal</a></li>
+                <li><a href="#" data-section="community-section" data-translate-key="nav_community">Community</a></li>
+                <li><a href="#" data-section="mind-matters-section" data-translate-key="nav_mind_matters">Mind Matters</a></li>
+                <li><a href="#" data-section="resources-section" data-translate-key="nav_resources">Resources</a></li>
+                <li><a href="#" data-section="settings-section" data-translate-key="nav_settings">Settings</a></li>
+                <li><a href="#" data-section="about-section" data-translate-key="nav_about">About</a></li>
+            </ul>
+            <div class="controls">
+                <select id="language-switcher"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option></select>
+                <div class="theme-switch-wrapper">
+                    <label class="theme-switch" for="theme-checkbox"><input type="checkbox" id="theme-checkbox" /><div class="slider round"></div></label>
+                </div>
+                <button id="logout-btn" class="cta-button" data-translate-key="logout_btn">Logout</button>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section id="auth-section">
+            <div class="auth-container">
+                <div class="auth-box" id="login-box">
+                    <h1 data-translate-key="login_title">Welcome Back</h1>
+                    <p data-translate-key="login_subtitle">Enter your username and PIN to continue.</p>
+                    <input type="text" id="login-username" placeholder="Username" data-translate-key="username_placeholder">
+                    <input type="password" id="login-pin" placeholder="4-Digit PIN" data-translate-key="pin_placeholder" maxlength="4" inputmode="numeric">
+                    <button id="login-btn" class="cta-button" data-translate-key="login_btn">Login</button>
+                    <p id="login-error" class="error-message"></p>
+                    <a href="#" id="show-signup" data-translate-key="show_signup_link">Don't have an account? Sign up.</a>
+                </div>
+                <div class="auth-box hidden" id="signup-box">
+                    <h1 data-translate-key="signup_title">Create Your Private Account</h1>
+                    <p data-translate-key="signup_subtitle">Choose a username. This is all you need.</p>
+                    <input type="text" id="signup-username" placeholder="Username" data-translate-key="username_placeholder">
+                    <button id="signup-btn" class="cta-button" data-translate-key="signup_btn">Sign Up</button>
+                    <p id="signup-error" class="error-message"></p>
+                    <a href="#" id="show-login" data-translate-key="show_login_link">Already have an account? Login.</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="quiz-section" class="hidden">
+            <div class="quiz-container">
+                <h1 data-translate-key="quiz_title">Welcome. Let's see how you're feeling.</h1>
+                <p data-translate-key="quiz_subtitle">Your answers help create a private emotional snapshot for this session. This is completely anonymous.</p>
+                <div id="question-area">
+                    <h2 id="question-text"></h2>
+                    <div id="answer-buttons" class="answer-grid"></div>
+                </div>
+                <div id="quiz-complete" class="hidden">
+                    <h2 data-translate-key="quiz_thanks">Thank you for sharing.</h2>
+                    <p data-translate-key="quiz_next_steps">You can now start chatting with our listening bot.</p>
+                    <button class="cta-button" id="start-chat-btn" data-translate-key="quiz_start_chat">Start Chat</button>
+                </div>
+            </div>
+        </section>
+        
+        <section id="chat-section" class="hidden">
+            <div class="chat-layout">
+                <div class="sidebar">
+                    <h3 data-translate-key="sessions_title">Sessions</h3>
+                    <ul id="session-list"></ul>
+                    <button id="new-session-btn" class="cta-button full-width" data-translate-key="new_session_btn">+ New Session</button>
+                </div>
+                <div class="chat-container">
+                    <div class="chat-header">
+                        <h3 id="chat-session-name" data-translate-key="chat_header">Big Sister (Anonymous)</h3>
+                        <button id="end-session-btn" class="cta-button small-btn hidden" data-translate-key="end_session_btn">End Session</button>
+                    </div>
+                    <div class="chat-messages" id="chat-messages"></div>
+                    <div class="chat-input-form">
+                        <input type="text" id="chat-input" data-translate-key="chat_placeholder" placeholder="Type your message here...">
+                        <button id="send-btn"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="journal-section" class="hidden">
+            <h1 data-translate-key="journal_title">Private Journal</h1>
+            <div class="journal-layout">
+                <div id="journal-list-container">
+                    <h3 data-translate-key="journal_entries">Your Entries</h3>
+                    <div id="journal-list"></div>
+                </div>
+                <div id="journal-editor-container">
+                    <h3 id="editor-heading" data-translate-key="journal_new_entry">New Entry</h3>
+                    <input type="text" id="journal-title" data-translate-key="journal_title_placeholder" placeholder="Entry Title">
+                    <textarea id="journal-content" data-translate-key="journal_content_placeholder" placeholder="Write what's on your mind..."></textarea>
+                    <div class="editor-buttons">
+                        <button id="save-journal-btn" class="cta-button" data-translate-key="journal_save">Save Entry</button>
+                        <button id="delete-journal-btn" class="cta-button danger-btn hidden" data-translate-key="journal_delete">Delete</button>
+                        <button id="reflect-journal-btn" class="cta-button secondary-btn hidden" data-translate-key="journal_reflect">Reflect with BigSister</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="community-section" class="hidden">
+            <h1 data-translate-key="community_title">A Wall of Support</h1>
+            <p data-translate-key="community_subtitle">Read anonymous, supportive messages from others, and leave one of your own. All messages are strictly reviewed by an AI to keep this a safe space.</p>
+            
+            <div class="community-layout">
+                <div id="my-message-container" class="setting-card">
+                    <h3 data-translate-key="community_my_message">Your Anonymous Message</h3>
+                    <p class="privacy-notice" data-translate-key="community_privacy">
+                        You can post one message to the wall. It will be reviewed by our AI moderator before it appears publicly. Your username is never shown.
+                    </p>
+                    <textarea id="my-message-textarea" rows="4" data-translate-key="community_placeholder" placeholder="Write something kind and supportive..."></textarea>
+                    <div id="my-message-status"></div>
+                    <button id="save-my-message-btn" class="cta-button" data-translate-key="community_save_btn">Save & Submit for Review</button>
+                </div>
+
+                <div id="message-wall-container">
+                    <div id="message-wall">
+                        <!-- Messages will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="mind-matters-section" class="hidden">
+            <h1 data-translate-key="mind_matters_title">Mind Matters</h1>
+            <p data-translate-key="mind_matters_subtitle">A collection of guided audio sessions to help you find your calm.</p>
+            <div id="audio-gallery" class="audio-gallery-grid"></div>
+        </section>
+
+        <section id="resources-section" class="hidden">
+            <h1 data-translate-key="resources_title">Support Services & Hotlines</h1><p data-translate-key="resources_subtitle">Select your country from the dropdown to find relevant hotlines and services.</p><div class="filters"><select id="filter-country"><option value="all" data-translate-key="filter_all_countries">All Countries</option><option value="USA">USA</option><option value="Canada">Canada</option><option value="UK">UK</option></select><select id="filter-type"><option value="all" data-translate-key="filter_all_types">All Service Types</option><option value="General" data-translate-key="filter_general">General</option><option value="LGBTQ+">LGBTQ+</option><option value="Substance Abuse" data-translate-key="filter_substance">Substance Abuse</option><option value="Crisis">Crisis</option></select><select id="filter-anonymity"><option value="all" data-translate-key="filter_all_anon">All Anonymity</option><option value="Anonymous" data-translate-key="filter_anonymous">Anonymous</option><option value="Confidential" data-translate-key="filter_confidential">Confidential</option></select></div><div id="resource-list" class="resource-grid"></div>
+        </section>
+        
+        <section id="emergency-section" class="hidden">
+            <h1 data-translate-key="emergency_title">Location-Based Emergency Resources</h1><p data-translate-key="emergency_subtitle">If you're in immediate danger, please call 911 (or your local emergency number).</p><div class="location-finder"><div class="emergency-controls"><select id="place-type-filter"><option value="mental_health" data-translate-key="emergency_mental_health">Mental Health Support</option><option value="hospital" data-translate-key="emergency_hospitals">Hospitals</option><option value="police" data-translate-key="emergency_police">Police Stations</option></select><button id="find-nearby-btn" class="cta-button"><i class="fas fa-map-marker-alt"></i> <span data-translate-key="emergency_find_btn">Find Help Near Me</span></button></div><div id="location-status"><p data-translate-key="emergency_status_initial">Select a service type and click the button to find help on the map.</p></div><div id="map"></div><div id="emergency-results-container" class="hidden"><h3 data-translate-key="emergency_results">Results</h3><div id="emergency-results" class="resource-grid"></div></div></div>
+        </section>
+
+        <section id="settings-section" class="hidden">
+            <h1 data-translate-key="settings_title">Settings</h1>
+            <div class="settings-container">
+                <div class="setting-card">
+                    <h3 data-translate-key="settings_change_pin">Change Your PIN</h3>
+                    <p data-translate-key="settings_pin_desc">Your 4-digit PIN protects your journal and your account access.</p>
+                    <button id="change-pin-btn" class="cta-button" data-translate-key="settings_change_pin_btn">Change PIN</button>
+                </div>
+                <div class="setting-card">
+                    <h3 data-translate-key="settings_about_you">About You (Optional & Private)</h3>
+                    <p class="privacy-notice" data-translate-key="settings_about_you_desc">
+                        <strong>This is COMPLETELY anonymous.</strong> The information below is stored ONLY on your device in your browser's local storage. It is never sent to a server until you chat, and is only used to help BigSister understand you better during a conversation.
+                    </p>
+                    <textarea id="user-profile-textarea" rows="6" data-translate-key="settings_about_you_placeholder" placeholder="Tell me anything you'd like me to remember (e.g., your pronouns, things you're struggling with, your goals)."></textarea>
+                    <button id="save-profile-btn" class="cta-button" data-translate-key="settings_save_profile_btn">Save Info</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="about-section" class="hidden">
+            <div class="about-container">
+                <img src="{{ url_for('static', filename='img/BigSister.png') }}" alt="BigSister Logo" class="about-logo">
+                <h1 data-translate-key="about_title">About BigSister</h1>
+                <p data-translate-key="about_para_1">Big Sister is a personal project that grew out of my passion for supporting mental health through technology. I wanted to create a friendly AI companion that feels approachable and comforting, someone people can talk to when they need a listening ear. Big Sister is designed to provide a safe, judgment-free space where you can share your thoughts and feelings openly.</p>
+                <p data-translate-key="about_para_2">She listens with empathy, offers gentle guidance, and encourages self-reflection, helping users practice self-care and cope with challenging moments. Big Sister is not a replacement for professional therapy, but she is meant to be a source of comfort and support, like a caring older sister who is always there for you.</p>
+                <p data-translate-key="about_para_3">This project reflects my belief that even small acts of understanding and kindness can make a difference. Through Big Sister, I hope to bring a little more connection, reassurance, and care into people’s daily lives, one conversation at a time.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2025 BigSister | <a href="#" id="privacy-link" data-translate-key="footer_privacy">Privacy Policy</a> | <a href="#" id="tos-link" data-translate-key="footer_tos">Terms of Service</a></p>
+    </footer>
+
+    <div id="pin-modal" class="modal">
+        <div class="modal-content">
+            <h2 id="pin-modal-title"></h2>
+            <p id="pin-modal-prompt"></p>
+            <div class="pin-input-area">
+                <input type="password" class="pin-input" maxlength="1" inputmode="numeric">
+                <input type="password" class="pin-input" maxlength="1" inputmode="numeric">
+                <input type="password" class="pin-input" maxlength="1" inputmode="numeric">
+                <input type="password" class="pin-input" maxlength="1" inputmode="numeric">
+            </div>
+            <p id="pin-error" class="error-message"></p>
+            <div class="modal-buttons">
+                <button id="pin-submit-btn" class="cta-button"></button>
+                <button id="pin-cancel-btn" class="cta-button secondary-btn"></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="tos-modal" class="modal">
+        <div class="modal-content"><span class="close-button">&times;</span><h2 data-translate-key="tos_title">Terms of Service & Privacy</h2><div class="modal-body"><p><strong data-translate-key="tos_last_updated">Last Updated: October 2024</strong></p><h4 data-translate-key="tos_purpose_header">Our Purpose</h4><p data-translate-key="tos_purpose_text">BigSister is an AI chatbot designed for compassionate mental and emotional health support. It provides a safe, non-judgmental space for sharing thoughts and feelings. While not a replacement for therapy, BigSister is a caring companion that listens, helps you practice mindfulness, and reminds you that you’re not alone.</p><h4 data-translate-key="tos_pro_help_header">1. Not a Replacement for Professional Help</h4><p data-translate-key="tos_pro_help_text">BigSister is for informational and emotional support purposes only and is NOT a substitute for professional medical advice, diagnosis, treatment, or crisis intervention. If you are in crisis or believe you may have a medical emergency, call 911 or a professional hotline immediately.</p><h4 data-translate-key="tos_anon_header">2. Anonymity and Data Usage</h4><p data-translate-key="tos_anon_text">Your conversations are anonymous. We do not require or store personally identifiable information like your name or email. To maintain your privacy, all user data, including journal entries and chat history, is stored exclusively on your device using your browser’s local storage. No data is sent to or stored on our servers. You are in complete control of your information.</p><h4 data-translate-key="tos_age_header">3. Age Requirement</h4><p data-translate-key="tos_age_text">You must be 13 years or older to use this service. If you are under 13, please do not use this application.</p><h4 data-translate-key="tos_conduct_header">4. User Conduct</h4><p data-translate-key="tos_conduct_text">You agree not to use the service for any unlawful purpose or to share content that is abusive, harassing, or hateful. We reserve the right to block users who violate these terms.</p><h4 data-translate-key="tos_liability_header">5. Limitation of Liability</h4><p data-translate-key="tos_liability_text">BigSister and its creators are not liable for any actions you take based on the information or support provided by the AI. You use this service at your own risk. We provide no warranty of any kind, express or implied.</p></div></div>
+    </div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

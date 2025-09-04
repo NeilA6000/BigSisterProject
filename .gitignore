@@ -1,0 +1,21 @@
+# Python bytecode and cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Secret environment variables
+.env
+
+# Local database files
+messages.json
+
+# IDE and editor folders
+.vscode/
+.idea/
+
+# Redundant compiled file from previous AI
+BigSister_Compiled_Code.txt
