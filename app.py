@@ -7,7 +7,7 @@ import unicodedata
 import requests
 import click  # <-- ADDED THIS IMPORT
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from dotenv import load_dotenv
 from groq import Groq
 from flask_cors import CORS
@@ -15,7 +15,8 @@ from flask_cors import CORS
 load_dotenv()
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
-
+# This is crucial for session management. We'll add this to the .env file.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 # --- DATABASE SIMULATION ---
 MESSAGES_DB_FILE = 'messages.json'
 
@@ -94,7 +95,31 @@ Another example to REJECT: "Hang in there." (Reason: Too ambiguous, could be mis
 # --- ROUTES ---
 @app.route('/')
 def index():
+    # --- ADD THIS CHECK ---
+    if not session.get('authenticated'):
+        return redirect(url_for('login'))
+    # ----------------------
+    
+    # The rest of the function stays the same
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        # Get the site password from your environment variables
+        SITE_PASSWORD = os.environ.get("SITE_PASSWORD")
+        
+        if request.form.get('password') == SITE_PASSWORD:
+            # If password is correct, set a session variable to remember the user
+            session['authenticated'] = True
+            # Redirect them to the main application page
+            return redirect(url_for('index'))
+        else:
+            error = 'Invalid password. Please try again.'
+            
+    # If it's a GET request or the password was wrong, show the login page
+    return render_template('login.html', error=error)
 
 @app.route('/get-greeting', methods=['POST'])
 def get_greeting():
