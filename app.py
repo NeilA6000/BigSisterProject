@@ -94,18 +94,25 @@ SYSTEM_PROMPT_MODERATOR = """You are an inhumanly strict, safety-obsessed conten
 # --- MAIN FRONTEND ROUTES ---
 @app.route('/')
 def index():
+    if session.get('authenticated'):
+        return render_template('index.html')
     return redirect(url_for('site_login'))
+
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def site_login():
+    if session.get('authenticated'):
+        return redirect(url_for('index'))
     error = None
     if request.method == 'POST':
         if request.form.get('password') == os.environ.get("SITE_PASSWORD"):
             session['authenticated'] = True
             return redirect(url_for('index'))
-        else: error = 'Invalid password. Please try again.'
+        else:
+            error = 'Invalid password. Please try again.'
     return render_template('login.html', error=error)
+
 
 # ======================================================================
 # === API V2: THE NEW DATABASE-DRIVEN BACKEND ===
