@@ -93,7 +93,9 @@ SYSTEM_PROMPT_MODERATOR = """You are an inhumanly strict, safety-obsessed conten
 
 # --- MAIN FRONTEND ROUTES ---
 @app.route('/')
-def index(): return render_template('index.html')
+def index():
+    return redirect(url_for('site_login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def site_login():
