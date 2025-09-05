@@ -1,4 +1,4 @@
-# FILE: app.py (Version 4.0 - FINAL, with local/production DB switching)
+# FILE: app.py (Version 5.1 - TRULY COMPLETE, with secret admin route)
 
 import os
 import re
@@ -17,29 +17,20 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- INITIALIZATION ---
-# load_dotenv() will look for a .env file and load its variables for local development.
 load_dotenv()
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 # --- DATABASE CONFIGURATION ---
-# This setup allows the app to use PostgreSQL on Render (or locally via .env)
-# and falls back to a simple SQLite file if no DATABASE_URL is found.
 basedir = os.path.abspath(os.path.dirname(__file__))
 DATABASE_URL = os.environ.get('DATABASE_URL')
-
 if DATABASE_URL:
-    # We are on Render OR a .env file is configured, use the PostgreSQL database
-    db_uri = DATABASE_URL
-    if db_uri.startswith("postgres://"):
-        db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+    db_uri = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
 else:
-    # We are running locally WITHOUT a .env file, use a simple SQLite database file
     print("WARNING: DATABASE_URL not found. Using local SQLite database 'database.db'.")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
-
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -97,12 +88,13 @@ try:
     groq_api_key = os.environ.get("GROQ_API_KEY")
     client = Groq(api_key=groq_api_key)
 except Exception as e: client = None
-SYSTEM_PROMPT = """You are "BigSister," an empathetic AI listener for teens...""" # Truncated
-SYSTEM_PROMPT_MODERATOR = """You are an inhumanly strict, safety-obsessed content moderation bot...""" # Truncated
+SYSTEM_PROMPT = """You are "BigSister," an empathetic AI listener for teens..."""
+SYSTEM_PROMPT_MODERATOR = """You are an inhumanly strict, safety-obsessed content moderation bot..."""
 
 # --- MAIN FRONTEND ROUTES ---
 @app.route('/')
 def index(): return render_template('index.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def site_login():
     error = None
@@ -267,16 +259,10 @@ def find_nearby():
     data = request.json
     lat, lon, place_type = data.get('lat'), data.get('lon'), data.get('place_type')
     if not all([lat, lon, place_type]): return jsonify({"error": "Latitude, longitude, and place_type are required."}), 400
-    
     overpass_url = "https://overpass-api.de/api/interpreter"
-    query_tags = {
-        'hospital': '[amenity=hospital]', 'police': '[amenity=police]',
-        'mental_health': '[healthcare~"counselling|psychotherapist|clinic|psychiatrist"]'
-    }
+    query_tags = {'hospital': '[amenity=hospital]', 'police': '[amenity=police]', 'mental_health': '[healthcare~"counselling|psychotherapist|clinic|psychiatrist"]'}
     if place_type not in query_tags: return jsonify({"error": "Invalid place type."}), 400
-    
     overpass_query = f"""[out:json];(node{query_tags[place_type]}(around:10000,{lat},{lon});way{query_tags[place_type]}(around:10000,{lat},{lon});relation{query_tags[place_type]}(around:10000,{lat},{lon}););out body;>;out skel qt;"""
-    
     try:
         response = requests.post(overpass_url, data=overpass_query)
         response.raise_for_status()
@@ -287,27 +273,38 @@ def find_nearby():
             if tags.get('name'):
                 addr_parts = [tags.get(k) for k in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:postcode']]
                 address = ' '.join(p for p in addr_parts if p)
-                places.append({
-                    "name": tags.get('name'), "address": address or "N/A", "phone": tags.get('phone') or "N/A",
-                    "website": tags.get('website') or "N/A", "lat": element.get('lat', lat), "lon": element.get('lon', lon)
-                })
+                places.append({"name": tags.get('name'), "address": address or "N/A", "phone": tags.get('phone') or "N/A", "website": tags.get('website') or "N/A", "lat": element.get('lat', lat), "lon": element.get('lon', lon)})
                 seen_ids.add(element['id'])
         return jsonify(places)
     except requests.exceptions.RequestException as e:
         print(f"Error querying Overpass API: {e}")
         return jsonify({"error": "Could not retrieve location data."}), 503
 
-# --- DATABASE CLI COMMANDS ---
+# --- DATABASE CLI COMMANDS & ONE-OFF ADMIN ROUTES ---
 @app.cli.command("init-db")
 def init_db_command():
     with app.app_context(): db.create_all()
     click.echo("Initialized the database.")
+
 @app.cli.command("reset-db")
 def reset_db_command():
     with app.app_context():
         db.drop_all()
         db.create_all()
     click.echo("Wiped and reset the database.")
+
+@app.route('/admin/reset-database/<secret_key>')
+def reset_database_route(secret_key):
+    ADMIN_KEY = os.environ.get('ADMIN_SECRET_KEY')
+    if not ADMIN_KEY:
+        return "ADMIN_SECRET_KEY is not set on the server.", 500
+    if secret_key == ADMIN_KEY:
+        with app.app_context():
+            db.drop_all()
+            db.create_all()
+        return "SUCCESS: The database has been wiped and reset.", 200
+    else:
+        return "ERROR: Invalid secret key.", 403
 
 if __name__ == '__main__':
     app.run(debug=True)
