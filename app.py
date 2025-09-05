@@ -1,4 +1,4 @@
-# FILE: app.py (Version 3.0 - FINAL)
+# FILE: app.py (Version 4.0 - FINAL, with local/production DB switching)
 
 import os
 import re
@@ -17,16 +17,29 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- INITIALIZATION ---
+# load_dotenv() will look for a .env file and load its variables for local development.
 load_dotenv()
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 # --- DATABASE CONFIGURATION ---
-db_uri = os.environ.get('DATABASE_URL')
-if db_uri and db_uri.startswith("postgres://"):
-    db_uri = db_uri.replace("postgres://", "postgresql://", 1)
-app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+# This setup allows the app to use PostgreSQL on Render (or locally via .env)
+# and falls back to a simple SQLite file if no DATABASE_URL is found.
+basedir = os.path.abspath(os.path.dirname(__file__))
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # We are on Render OR a .env file is configured, use the PostgreSQL database
+    db_uri = DATABASE_URL
+    if db_uri.startswith("postgres://"):
+        db_uri = db_uri.replace("postgres://", "postgresql://", 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_uri
+else:
+    # We are running locally WITHOUT a .env file, use a simple SQLite database file
+    print("WARNING: DATABASE_URL not found. Using local SQLite database 'database.db'.")
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'database.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -248,7 +261,6 @@ def get_my_message():
     if msg: return jsonify({"text": msg.text, "status": msg.status})
     return jsonify({"status": "not_found"})
 
-# THIS IS THE CORRECTED, FULLY-FUNCTIONAL VERSION
 @app.route('/find-nearby', methods=['POST'])
 @login_required
 def find_nearby():
