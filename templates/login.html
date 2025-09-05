@@ -43,7 +43,7 @@
     <div class="login-container">
         <div class="login-box">
             <h1>Enter Access Code</h1>
-            <form method="POST" action="{{ url_for('login') }}">
+            <form method="POST" action="{{ url_for('site_login') }}">
                 <input type="password" name="password" placeholder="Site Password" required>
                 {% if error %}
                     <p class="error-message">{{ error }}</p>
