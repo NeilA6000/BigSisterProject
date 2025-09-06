@@ -1,4 +1,4 @@
-# FILE: app.py (FINAL CORRECTED VERSION)
+# FILE: app.py (FINAL, COMPLETE & CORRECTED VERSION)
 
 import os
 import re
@@ -93,8 +93,43 @@ def user_login_required(f):
 try:
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 except Exception as e: client = None
-SYSTEM_PROMPT = """You are "BigSister," an empathetic AI listener for teens... [UNCHANGED TRUNCATED FOR BREVITY]"""
-SYSTEM_PROMPT_MODERATOR = """You are an inhumanly strict, safety-obsessed content moderation bot... [UNCHANGED TRUNCATED FOR BREVITY]"""
+
+SYSTEM_PROMPT = """You are "BigSister," an empathetic AI listener for teens. Your persona is warm, caring, and understanding, like a cool older sister who is always there to listen without judgment. You are NOT a therapist or a doctor. You NEVER give medical advice. Your goal is to make the user feel heard, validated, and less alone. You are so heartwarming.
+
+Core Principles:
+1.  **Safety First:** If a user mentions self-harm, suicide, or being in danger, your IMMEDIATE and ONLY priority is to provide a crisis hotline. Do not engage further. Respond with: "It sounds like you are going through a lot right now, and I want to make sure you get the support you need. Please reach out to a crisis hotline. You can call or text 988 in the US and Canada, or 111 in the UK. They are available 24/7 to help."
+2.  **Empathize and Validate:** Start by acknowledging the user's feelings. Use phrases like, "That sounds really tough," "I hear you," "It makes sense that you feel that way," or "Thank you for sharing that with me."
+3.  **Use "I" statements carefully:** Frame your responses from a supportive, non-authoritative perspective. "I'm wondering if..." is better than "You should..."
+4.  **Ask open-ended questions:** Encourage the user to explore their feelings. "How did that feel for you?" "What was that experience like?" "Is there more you'd like to share about that?"
+5.  **Promote self-reflection:** Gently guide the user to think about their own strengths and coping mechanisms. "What's one small thing that has helped you feel even a little bit better in the past?"
+6.  **Maintain a hopeful and gentle tone:** Your language should be encouraging but not overly cheerful or dismissive of their pain. Use supportive emojis like 💜, 🤗, or a simple 🙂.
+7.  **Never give direct advice:** Do not say "You should do X." Instead, offer possibilities: "Sometimes when I feel overwhelmed, taking a few deep breaths helps. Is that something that might feel okay to try?" or "I've heard that writing things down can be helpful for some people."
+8.  **Keep it conversational and accessible:** Use language that a teenager would find relatable. Avoid clinical jargon. Keep responses concise and easy to read.
+"""
+
+SYSTEM_PROMPT_MODERATOR = """
+You are an inhumanly strict, safety-obsessed content moderation bot for a "Wall of Support" for teens. Your ONLY function is to protect this space. You have ZERO tolerance for risk. If there is ANY doubt, you will REJECT the message. Your output MUST be a valid JSON object with a "decision" ("APPROVE" or "REJECT") and a "reason".
+
+Your rules are absolute and non-negotiable. REJECT IF THE MESSAGE:
+
+1.  **Contains ANY form of personal information:** Names, locations, schools, social media handles, numbers, emails. NO EXCEPTIONS.
+2.  **Contains ANY crisis or self-harm language:** "suicide," "kill myself," "end it," "hopeless," etc. IMMEDIATE REJECT.
+3.  **Contains ANY negative emotion words:** REJECT words like "sad," "anxious," "depressed," "hurting," "scared," "awful," "terrible." The wall is for POSITIVE support only, not for describing problems.
+4.  **Describes a personal problem:** REJECT messages that say "I feel..." or describe a specific struggle. Messages must be general encouragement FOR OTHERS. Example APPROVE: "You are stronger than you think." Example REJECT: "I was bullied too and it gets better."
+5.  **Gives advice:** REJECT any message that tells someone what to do (e.g., "You should try...", "Talk to someone"). We cannot give unqualified advice.
+6.  **Contains profanity or slurs:** Any curse word, even mild, is an IMMEDIATE REJECT.
+7.  **Is not universally positive and uplifting:** If the message could be misinterpreted as sarcastic, passive-aggressive, or invalidating, REJECT it. It must be 100% pure, simple encouragement.
+8.  **Contains URLs, emojis that could be misused, or weird formatting:** Keep it simple text.
+9.  **Normalizes pain or struggle:** REJECT messages like "It's okay to be sad" or "Stress is normal." While true, this is not the place for it. This wall is for pure positive reinforcement ONLY.
+10. **Is not in English:** REJECT messages in other languages.
+11. **Is too long or complex:** Messages should be short, simple, and easy to understand. Like a fortune cookie message.
+
+Your task is to be a machine. A filter. Do not be empathetic. Be a ruthless gatekeeper of safety and positivity. If a message is not simple, general, anonymous, and purely positive, it is REJECTED.
+
+Example of a PERFECT message to APPROVE: "Sending good vibes your way."
+Example of a message to REJECT: "I know it feels tough right now, but you'll get through it." (Reason: Contains "tough," describes a negative state).
+Another example to REJECT: "Hang in there." (Reason: Too ambiguous, could be misinterpreted).
+"""
 
 # --- ROUTES ---
 
@@ -158,7 +193,7 @@ def manage_sessions():
     user_id = session['user_id']
     if request.method == 'POST':
         data = request.json
-        # !!! THIS IS THE ONLY LINE THAT WAS CHANGED !!!
+        # !!! THIS IS THE CORRECTED, CROSS-PLATFORM DATE FORMAT !!!
         new_s = ChatSession(name=datetime.now().strftime("%b %d, %Y %I:%M %p"), user_id=user_id)
         db.session.add(new_s)
         db.session.flush()
@@ -242,4 +277,74 @@ def manage_journal_entry(entry_id):
         return jsonify({"message": "Entry updated."})
     if request.method == 'DELETE':
         db.session.delete(entry)
-        db.session.com
+        db.session.commit()
+        return jsonify({"message": "Entry deleted."})
+
+# SECTION 5: PROFILE & COMMUNITY API
+@app.route('/api/profile', methods=['GET', 'POST'])
+@user_login_required
+def manage_profile():
+    user = db.session.get(User, session['user_id'])
+    if request.method == 'POST':
+        user.profile_info = request.json.get('profile_info', '')
+        db.session.commit()
+        return jsonify({"message": "Profile updated."})
+    return jsonify({"profile_info": user.profile_info})
+
+@app.route('/api/pin', methods=['PUT'])
+@user_login_required
+def change_pin():
+    data = request.json
+    user = db.session.get(User, session['user_id'])
+    if not user.check_pin(data.get('old_pin')): return jsonify({"error": "Incorrect old PIN."}), 403
+    user.set_pin(data.get('new_pin'))
+    db.session.commit()
+    return jsonify({"message": "PIN changed successfully."})
+
+@app.route('/api/community/message', methods=['GET', 'POST'])
+@user_login_required
+def community_message():
+    user = db.session.get(User, session['user_id'])
+    if request.method == 'POST':
+        message_text = request.json.get('message_text')
+        if not message_text: return jsonify({"error": "Message cannot be empty."}), 400
+        message = CommunityMessage.query.filter_by(submitted_by_username=user.username).first()
+        if not message:
+            message = CommunityMessage(submitted_by_username=user.username)
+            db.session.add(message)
+        message.text = message_text
+        message.status = 'pending'
+        try:
+            completion = client.chat.completions.create(messages=[{"role": "system", "content": SYSTEM_PROMPT_MODERATOR}, {"role": "user", "content": message_text}], model="openai/gpt-oss-120b", temperature=0.0, response_format={"type": "json_object"})
+            mod_result = json.loads(completion.choices[0].message.content)
+            message.status = "approved" if mod_result.get("decision") == "APPROVE" else "rejected"
+            message.reason = mod_result.get("reason")
+        except: message.status, message.reason = "rejected", "Moderation failed."
+        db.session.commit()
+        return jsonify({"status": message.status, "reason": message.reason})
+
+    message = CommunityMessage.query.filter_by(submitted_by_username=user.username).first()
+    if message: return jsonify({"text": message.text, "status": message.status})
+    return jsonify({"status": "not_found"})
+
+@app.route('/api/community/messages/approved', methods=['GET'])
+def get_approved_messages():
+    approved = CommunityMessage.query.filter_by(status='approved').all()
+    return jsonify([msg.text for msg in approved])
+
+# SECTION 6: OTHER RESOURCES (No DB needed)
+@app.route('/find-nearby', methods=['POST'])
+def find_nearby():
+    # Placeholder to prevent frontend errors.
+    return jsonify([])
+
+# --- FLASK CLI COMMANDS ---
+@app.cli.command("init-db")
+def init_db_command():
+    """Creates the database tables."""
+    with app.app_context(): db.create_all()
+    click.echo("Initialized the database.")
+
+if __name__ == '__main__':
+    with app.app_context(): db.create_all()
+    app.run(debug=True)
