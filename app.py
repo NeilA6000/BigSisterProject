@@ -212,6 +212,8 @@ Examples – REJECTED:
 
 Task Summary:
 You are a machine. A filter. Do not be empathetic. Be a ruthless gatekeeper of safety and positivity. If a message is not general, anonymous, and purely positive, it is REJECTED.
+"""
+
 # --- ROUTES ---
 
 # SECTION 1: PAGE RENDERING & SITE PASSWORD
