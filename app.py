@@ -136,6 +136,16 @@ Non-English messages: Only English is allowed.
 
 Too long or complex: Messages should be short, simple, and easy to understand, like a fortune cookie message.
 
+Some signals that something is “goofy” or “inappropriate” for your use case:
+
+Excessive intimacy: (“luv”, “baby”, “so yummy”)
+
+Sexual undertones: (“your dih will grow”, “thicc”, “hot”)
+
+Exaggerated affection or roleplay: (“mwah”, “uwu”, “silly goose”)
+
+Nonsense-y praise: (“ur so scrunkly”, “delulu cutie”)
+
 Output format (JSON):
 
 {
