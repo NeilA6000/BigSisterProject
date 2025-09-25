@@ -146,6 +146,7 @@ Exaggerated affection or roleplay: (“mwah”, “uwu”, “silly goose”)
 
 Nonsense-y praise: (“ur so scrunkly”, “delulu cutie”)
 
+Banned words, anything like it, (trying to avoid it) must be REJECTED. This must be taken seriously. (Dih, dih)
 Output format (JSON):
 
 {
