@@ -33,52 +33,84 @@ db = SQLAlchemy(app)
 
 
 # --- DATABASE MODELS ---
+# --- DATABASE MODELS ---
 class User(db.Model):
-    __tablename__ = 'users'  # <- THIS IS THE FIX
+    __tablename__ = 'users'
+    
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     pin_hash = db.Column(db.String(256), nullable=False)
     profile_info = db.Column(db.Text, nullable=True, default="")
-    sessions = db.relationship('ChatSession', backref='user', lazy=True, cascade="all, delete-orphan")
-    journal_entries = db.relationship('JournalEntry', backref='user', lazy=True, cascade="all, delete-orphan")
+    
+    sessions = db.relationship(
+        'ChatSession',
+        backref='user',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+    journal_entries = db.relationship(
+        'JournalEntry',
+        backref='user',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
 
-    def set_pin(self, pin): self.pin_hash = generate_password_hash(str(pin))
-    def check_pin(self, pin): return check_password_hash(self.pin_hash, str(pin))
+    def set_pin(self, pin):
+        self.pin_hash = generate_password_hash(str(pin))
+
+    def check_pin(self, pin):
+        return check_password_hash(self.pin_hash, str(pin))
 
 
 class ChatSession(db.Model):
     __tablename__ = 'chat_sessions'
+    
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    messages = db.relationship('ChatMessage', backref='session', lazy=True, cascade="all, delete-orphan")
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    messages = db.relationship(
+        'ChatMessage',
+        backref='session',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
 
 class ChatMessage(db.Model):
     __tablename__ = 'chat_messages'
+    
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(20), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_session.id'), nullable=False)
+    
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
+
 
 class JournalEntry(db.Model):
     __tablename__ = 'journal_entries'
+    
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
 
 class CommunityMessage(db.Model):
     __tablename__ = 'community_messages'
+    
     id = db.Column(db.Integer, primary_key=True)
     submitted_by_username = db.Column(db.String(80), nullable=False, unique=True)
     text = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending')
     reason = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
 
 # --- DECORATORS ---
 def site_password_required(f):
