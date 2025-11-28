@@ -24,12 +24,29 @@ CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 @app.before_request
+@app.before_request
 def force_password_each_request():
-    # List all endpoints that should NOT be logged out automatically
-    whitelist = ['login_site', 'api_login', 'api_signup']
-    
-    if request.endpoint not in whitelist:
-        session.pop('authenticated', None)
+    # endpoints that must be reachable without being auto-logged-out
+    whitelist = {
+        'login_site',        # /login GET/POST - site password page
+        'api_login',         # /api/login
+        'api_signup',        # /api/signup
+        'index',             # / (so redirect after login works)
+        'static',            # static files (css/js/img)
+        'check_auth'         # any endpoints that front-end uses to check auth
+    }
+
+    # allow any /api/* route: function names in your file start with "api_"
+    if request.endpoint is None:
+        return
+    if request.endpoint in whitelist:
+        return
+    if request.endpoint.startswith('api_'):
+        return
+
+    # otherwise clear site-password auth (if that's still what you want)
+    session.pop('authenticated', None)
+
 
 
 # --- DATABASE CONFIGURATION ---
