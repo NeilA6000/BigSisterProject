@@ -23,6 +23,10 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
+@app.before_request
+def force_password_each_request():
+    session.pop('authenticated', None)
+
 # --- DATABASE CONFIGURATION ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
