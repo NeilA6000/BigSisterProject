@@ -30,6 +30,12 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+with app.app_context():
+    try:
+        db.create_all()
+        print("✅ Database tables created or already exist.")
+    except Exception as e:
+        print(f"⚠️ Failed to create tables: {e}")
 
 
 # --- DATABASE MODELS ---
