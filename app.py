@@ -47,7 +47,7 @@ class User(db.Model):
 
 
 class ChatSession(db.Model):
-     __tablename__ = 'chat_sessions'
+    __tablename__ = 'chat_sessions'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -56,7 +56,7 @@ class ChatSession(db.Model):
     messages = db.relationship('ChatMessage', backref='session', lazy=True, cascade="all, delete-orphan")
 
 class ChatMessage(db.Model):
-       __tablename__ = 'chat_messages'
+    __tablename__ = 'chat_messages'
     id = db.Column(db.Integer, primary_key=True)
     role = db.Column(db.String(20), nullable=False)
     content = db.Column(db.Text, nullable=False)
