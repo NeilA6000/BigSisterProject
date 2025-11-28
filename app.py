@@ -25,7 +25,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
 @app.before_request
 def force_password_each_request():
-    session.pop('authenticated', None)
+    # List all endpoints that should NOT be logged out automatically
+    whitelist = ['login_site', 'api_login', 'api_signup']
+    
+    if request.endpoint not in whitelist:
+        session.pop('authenticated', None)
+
 
 # --- DATABASE CONFIGURATION ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
