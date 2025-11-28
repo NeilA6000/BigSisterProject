@@ -484,6 +484,14 @@ def init_db_command():
     with app.app_context(): db.create_all()
     click.echo("Initialized the database.")
 
+@app.route('/force-init-db')
+def force_init_db():
+    try:
+        db.create_all()
+        return "✅ Tables created"
+    except Exception as e:
+        return f"⚠️ Error: {e}"
+        
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
