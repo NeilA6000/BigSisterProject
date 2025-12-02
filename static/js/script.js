@@ -8,7 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSessionId: null,
         currentJournalId: null,
         isBotTyping: false,
-        map: null,
+        heatmapMap: null, 
+        pickerMap: null,     // NEW
+        pickerMarker: null,  // NEW
+        selectedLat: null,   // NEW
+        selectedLng: null    // NEW
     };
 
     // --- CONSTANTS & DATA ---
@@ -22,7 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
         allSections: document.querySelectorAll('main section'), header: document.querySelector('header'),
         authSection: document.getElementById('auth-section'), loginBox: document.getElementById('login-box'), signupBox: document.getElementById('signup-box'),
         loginUsernameInput: document.getElementById('login-username'), loginPinInput: document.getElementById('login-pin'),
-        signupUsernameInput: document.getElementById('signup-username'), loginBtn: document.getElementById('login-btn'), signupBtn: document.getElementById('signup-btn'),
+        signupUsernameInput: document.getElementById('signup-username'), signupTosCheckbox: document.getElementById('signup-tos'),
+        loginBtn: document.getElementById('login-btn'), signupBtn: document.getElementById('signup-btn'),
         showSignupLink: document.getElementById('show-signup'), showLoginLink: document.getElementById('show-login'),
         loginError: document.getElementById('login-error'), signupError: document.getElementById('signup-error'),
         welcomeUserEl: document.getElementById('welcome-user'), logoutBtn: document.getElementById('logout-btn'),
@@ -34,19 +39,34 @@ document.addEventListener('DOMContentLoaded', () => {
         newSessionBtn: document.getElementById('new-session-btn'), endSessionBtn: document.getElementById('end-session-btn'),
         chatSessionName: document.getElementById('chat-session-name'), chatMessages: document.getElementById('chat-messages'),
         chatInput: document.getElementById('chat-input'), sendBtn: document.getElementById('send-btn'),
+        
+        // JOURNAL DOM ELEMENTS
         journalList: document.getElementById('journal-list'), editorHeading: document.getElementById('editor-heading'),
-        journalTitleInput: document.getElementById('journal-title'), journalContentInput: document.getElementById('journal-content'),
+        journalTitleInput: document.getElementById('journal-title'), 
+        journalMoodInput: document.getElementById('journal-mood'),
+        journalLocationInput: document.getElementById('journal-location'), // NEW
+        journalContentInput: document.getElementById('journal-content'),
         saveJournalBtn: document.getElementById('save-journal-btn'), deleteJournalBtn: document.getElementById('delete-journal-btn'), reflectJournalBtn: document.getElementById('reflect-journal-btn'),
+        
+        // SETTINGS & PIN MODAL
         pinModal: document.getElementById('pin-modal'), pinModalTitle: document.getElementById('pin-modal-title'), pinModalPrompt: document.getElementById('pin-modal-prompt'),
         pinInputs: document.querySelectorAll('.pin-input'), pinError: document.getElementById('pin-error'), pinSubmitBtn: document.getElementById('pin-submit-btn'), pinCancelBtn: document.getElementById('pin-cancel-btn'),
-        changePinBtn: document.getElementById('change-pin-btn'), userProfileTextarea: document.getElementById('user-profile-textarea'), saveProfileBtn: document.getElementById('save-profile-btn'),
+        
+        // SETTINGS PAGE
+        oldPinInput: document.getElementById('old-pin'), newPinInput: document.getElementById('new-pin'), changePinBtn: document.getElementById('change-pin-btn'),
+        userProfileTextarea: document.getElementById('user-profile-textarea'), saveProfileBtn: document.getElementById('save-profile-btn'),
+        
+        // OTHER SECTIONS
         audioGallery: document.getElementById('audio-gallery'), resourceList: document.getElementById('resource-list'),
         filterCountry: document.getElementById('filter-country'), filterType: document.getElementById('filter-type'), filterAnonymity: document.getElementById('filter-anonymity'),
         findNearbyBtn: document.getElementById('find-nearby-btn'), locationStatus: document.getElementById('location-status'), mapContainer: document.getElementById('map'),
         emergencyResultsContainer: document.getElementById('emergency-results-container'), emergencyResults: document.getElementById('emergency-results'),
-        tosModal: document.getElementById('tos-modal'), tosLink: document.getElementById('tos-link'), privacyLink: document.getElementById('privacy-link'), closeTosModalBtn: document.querySelector('#tos-modal .close-button'),
+        tosModal: document.getElementById('tos-modal'), tosLink: document.getElementById('tos-link'), tosLinkInline: document.getElementById('tos-link-inline'), privacyLink: document.getElementById('privacy-link'), closeTosModalBtn: document.querySelector('#tos-modal .close-button'),
         saveMyMessageBtn: document.getElementById('save-my-message-btn'), myMessageTextarea: document.getElementById('my-message-textarea'),
         myMessageStatus: document.getElementById('my-message-status'), messageWall: document.getElementById('message-wall'),
+        
+        // HEATMAP
+        heatmapSection: document.getElementById('heatmap-section'), heatmapContainer: document.getElementById('heatmap-container')
     };
 
     // --- UTILITY FUNCTIONS ---
@@ -75,6 +95,19 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.themeCheckbox.checked = isDark;
     }
 
+    // Toggle Loading state for buttons
+    function toggleLoading(btnElement, isLoading, loadingText = "Loading...") {
+        if (!btnElement) return;
+        if (isLoading) {
+            btnElement.dataset.originalText = btnElement.innerText;
+            btnElement.disabled = true;
+            btnElement.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${loadingText}`;
+        } else {
+            btnElement.disabled = false;
+            btnElement.innerText = btnElement.dataset.originalText || "Submit";
+        }
+    }
+
     // --- AUTHENTICATION ---
     function showAuthUI() { DOMElements.header.classList.add('hidden'); showSection('auth-section'); }
     function showMainAppUI(username) {
@@ -88,17 +121,31 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSignup() {
         DOMElements.signupError.textContent = '';
         const username = DOMElements.signupUsernameInput.value.trim();
+        
+        // TOS Check
+        if (!DOMElements.signupTosCheckbox.checked) {
+            DOMElements.signupError.textContent = 'You must agree to the Terms of Service.';
+            return;
+        }
+
         if (username.length < 3) { DOMElements.signupError.textContent = 'Username must be at least 3 characters.'; return; }
+        
         try {
             const pin = await getPin({ title: 'Set Your Account PIN', prompt: 'Create a 4-digit PIN for your new account.', buttonText: 'Set PIN', cancellable: true });
             const confirmPin = await getPin({ title: 'Confirm PIN', prompt: 'Please enter the PIN again to confirm.', buttonText: 'Confirm', cancellable: true });
             if (pin !== confirmPin) { alert('PINs did not match. Please try again.'); return; }
             
+            toggleLoading(DOMElements.signupBtn, true, "Creating Account...");
+
             const response = await apiFetch('/api/signup', { method: 'POST', body: { username, pin } });
             const data = await response.json();
             if (response.ok) { showMainAppUI(data.username); } 
             else { DOMElements.signupError.textContent = data.error || 'An error occurred.'; }
-        } catch (error) { console.log("PIN setup cancelled."); }
+        } catch (error) { 
+            console.log("PIN setup cancelled."); 
+        } finally {
+            toggleLoading(DOMElements.signupBtn, false);
+        }
     }
 
     async function handleLogin() {
@@ -107,10 +154,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const pin = DOMElements.loginPinInput.value.trim();
         if (!username || !pin) { DOMElements.loginError.textContent = 'Username and PIN are required.'; return; }
         
-        const response = await apiFetch('/api/login', { method: 'POST', body: { username, pin } });
-        const data = await response.json();
-        if (response.ok) { showMainAppUI(data.username); } 
-        else { DOMElements.loginError.textContent = data.error || 'An error occurred.'; }
+        toggleLoading(DOMElements.loginBtn, true, "Logging in...");
+
+        try {
+            const response = await apiFetch('/api/login', { method: 'POST', body: { username, pin } });
+            const data = await response.json();
+            if (response.ok) { showMainAppUI(data.username); } 
+            else { DOMElements.loginError.textContent = data.error || 'An error occurred.'; }
+        } catch (e) {
+            DOMElements.loginError.textContent = "Connection error.";
+        } finally {
+            toggleLoading(DOMElements.loginBtn, false);
+        }
     }
 
     async function handleLogout() {
@@ -119,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.loginUsernameInput.value = '';
         DOMElements.loginPinInput.value = '';
         DOMElements.signupUsernameInput.value = '';
+        DOMElements.signupTosCheckbox.checked = false;
     }
 
     function getPin(config) {
@@ -148,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function handleQuizCompletion() {
+        toggleLoading(DOMElements.startChatBtn, true, "Preparing Space...");
         try {
             const response = await apiFetch('/api/sessions', { method: 'POST', body: { quiz_answers: userQuizAnswers } });
             const newSession = await response.json();
@@ -157,7 +214,12 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMessage(newSession.initial_message, true); // type the greeting
             DOMElements.chatSessionName.textContent = newSession.name;
             showSection('chat-section');
-        } catch (error) { console.error("Failed to create new session:", error); alert("Could not start a new session."); }
+        } catch (error) { 
+            console.error("Failed to create new session:", error); 
+            alert("Could not start a new session."); 
+        } finally {
+            toggleLoading(DOMElements.startChatBtn, false);
+        }
     }
     
     async function loadChatView() {
@@ -263,8 +325,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function initPickerMap() {
+        if (appState.pickerMap) {
+            setTimeout(() => appState.pickerMap.invalidateSize(), 100);
+            return;
+        }
+        
+        // Default view (World)
+        appState.pickerMap = L.map('picker-map').setView([20, 0], 1);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(appState.pickerMap);
+
+        // Click event to drop pin
+        appState.pickerMap.on('click', (e) => {
+            const { lat, lng } = e.latlng;
+            appState.selectedLat = lat;
+            appState.selectedLng = lng;
+
+            if (appState.pickerMarker) {
+                appState.pickerMarker.setLatLng(e.latlng);
+            } else {
+                appState.pickerMarker = L.marker(e.latlng).addTo(appState.pickerMap);
+            }
+        });
+    }
+
     // --- JOURNAL (Database backed) ---
-    async function loadJournalView() { resetJournalEditor(); await renderJournalList(); }
+    async function loadJournalView() { 
+        resetJournalEditor(); 
+        await renderJournalList(); 
+        // Initialize the map after the tab is visible
+        setTimeout(initPickerMap, 100); 
+    }
     async function renderJournalList() {
         const response = await apiFetch('/api/journal');
         const entries = await response.json();
@@ -273,41 +366,118 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = document.createElement('div');
             item.className = `journal-item ${entry.id === appState.currentJournalId ? 'active' : ''}`;
             item.dataset.journalId = entry.id;
-            item.innerHTML = `<h4>${entry.title}</h4><p>${new Date(entry.timestamp).toLocaleDateString()}</p>`;
+            // Updated to show Mood AND Location in list
+            const locText = entry.location ? ` | ${entry.location}` : '';
+            item.innerHTML = `<h4>${entry.title}</h4><p>${entry.mood}${locText} • ${new Date(entry.timestamp).toLocaleDateString()}</p>`;
             item.addEventListener('click', () => loadJournalEntry(entry.id));
             DOMElements.journalList.appendChild(item);
         });
     }
-    async function loadJournalEntry(journalId) {
+   async function loadJournalEntry(journalId) {
         appState.currentJournalId = journalId;
         const response = await apiFetch(`/api/journal/${journalId}`);
         const entry = await response.json();
-        DOMElements.journalTitleInput.value = entry.title;
-        DOMElements.journalContentInput.value = entry.content;
+        
+        // --- 1. SHOW BUTTONS IMMEDIATELY ---
+        // We do this first so the button appears even if the map has a glitch
         DOMElements.editorHeading.textContent = `Editing: ${entry.title}`;
         DOMElements.deleteJournalBtn.classList.remove('hidden');
-        DOMElements.reflectJournalBtn.classList.remove('hidden');
+        DOMElements.reflectJournalBtn.classList.remove('hidden'); // <--- UNHIDES BUTTON
         DOMElements.saveJournalBtn.textContent = 'Update Entry';
+
+        // --- 2. Fill Text Inputs ---
+        DOMElements.journalTitleInput.value = entry.title;
+        DOMElements.journalContentInput.value = entry.content;
+        DOMElements.journalMoodInput.value = entry.mood || 'Neutral';
+        
+        // --- 3. Handle Map Marker ---
+        // Initialize map if it doesn't exist yet (prevents crash)
+        if (!appState.pickerMap) {
+            initPickerMap();
+            // Small pause to let the div render
+            await new Promise(r => setTimeout(r, 100)); 
+        }
+        
+        // Force map to redraw correctly
+        appState.pickerMap.invalidateSize();
+
+        // Check for coordinates
+        if (entry.lat && entry.lng) { 
+            appState.selectedLat = entry.lat;
+            appState.selectedLng = entry.lng;
+            
+            if (appState.pickerMarker) {
+                appState.pickerMarker.setLatLng([entry.lat, entry.lng]);
+            } else {
+                appState.pickerMarker = L.marker([entry.lat, entry.lng]).addTo(appState.pickerMap);
+            }
+            appState.pickerMap.setView([entry.lat, entry.lng], 5);
+        } else {
+            // No saved location? Reset map view
+            if (appState.pickerMarker) {
+                appState.pickerMap.removeLayer(appState.pickerMarker);
+                appState.pickerMarker = null;
+            }
+            appState.pickerMap.setView([20, 0], 1);
+        }
+        
         renderJournalList();
     }
     function resetJournalEditor() {
         appState.currentJournalId = null;
-        DOMElements.journalTitleInput.value = ''; DOMElements.journalContentInput.value = '';
+        DOMElements.journalTitleInput.value = ''; 
+        DOMElements.journalContentInput.value = '';
+        DOMElements.journalMoodInput.value = 'Neutral';
+        
+        // Reset Map State
+        appState.selectedLat = null;
+        appState.selectedLng = null;
+        if (appState.pickerMarker) {
+            appState.pickerMap.removeLayer(appState.pickerMarker);
+            appState.pickerMarker = null;
+        }
+        if (appState.pickerMap) {
+            appState.pickerMap.setView([20, 0], 1); // Reset zoom
+        }
+
         DOMElements.editorHeading.textContent = 'New Entry';
-        DOMElements.deleteJournalBtn.classList.add('hidden'); DOMElements.reflectJournalBtn.classList.add('hidden');
+        DOMElements.deleteJournalBtn.classList.add('hidden'); 
+        DOMElements.reflectJournalBtn.classList.add('hidden');
         DOMElements.saveJournalBtn.textContent = 'Save Entry';
     }
     async function saveJournalEntry() {
         const title = DOMElements.journalTitleInput.value.trim();
         const content = DOMElements.journalContentInput.value.trim();
+        const mood = DOMElements.journalMoodInput.value;
+        
         if (!title || !content) { alert('Title and content are required.'); return; }
+        
+        toggleLoading(DOMElements.saveJournalBtn, true, "Saving...");
+
         const method = appState.currentJournalId ? 'PUT' : 'POST';
         const endpoint = appState.currentJournalId ? `/api/journal/${appState.currentJournalId}` : '/api/journal';
-        const response = await apiFetch(endpoint, { method, body: { title, content } });
-        const newEntry = await response.json();
-        appState.currentJournalId = newEntry.id;
-        await renderJournalList();
-        loadJournalEntry(newEntry.id);
+        
+        // Send lat/lng directly
+        const body = { 
+            title, 
+            content, 
+            mood, 
+            lat: appState.selectedLat, 
+            lng: appState.selectedLng 
+        };
+        
+        try {
+            const response = await apiFetch(endpoint, { method, body });
+            const newEntry = await response.json();
+            appState.currentJournalId = newEntry.id;
+            await renderJournalList();
+            // Don't reload entry immediately so user sees the save state
+            alert("Entry Saved!");
+        } catch (e) {
+            alert("Failed to save entry.");
+        } finally {
+            toggleLoading(DOMElements.saveJournalBtn, false);
+        }
     }
     async function deleteJournalEntry() {
         if (!appState.currentJournalId || !confirm('Are you sure you want to delete this entry?')) return;
@@ -316,24 +486,89 @@ document.addEventListener('DOMContentLoaded', () => {
         await renderJournalList();
     }
     async function reflectOnJournalEntry() {
-        if (!appState.currentJournalId) return;
-        const entryRes = await apiFetch(`/api/journal/${appState.currentJournalId}`);
-        const entry = await entryRes.json();
-        const sessionsRes = await apiFetch('/api/sessions');
-        const sessions = await sessionsRes.json();
-        let activeSessionId = sessions[0]?.id;
-        if (!activeSessionId) {
-            alert("Please start a new chat session before reflecting.");
-            showSection('quiz-section'); resetQuiz(); return;
-        }
-        appState.currentSessionId = activeSessionId;
+        if (!appState.currentJournalId) return; // Should be loaded
+        const title = DOMElements.journalTitleInput.value;
+        const content = DOMElements.journalContentInput.value;
+        const mood = DOMElements.journalMoodInput.value;
+        const location = DOMElements.journalLocationInput.value;
+
+        // Construct context for the AI
+        const context = `Journal Title: "${title}". Location: "${location}". Mood: ${mood}. Content: "${content}"`;
+
+        // Start a new session explicitly for reflection
+        const res = await apiFetch('/api/sessions', { method: 'POST', body: { reflection_context: context } });
+        const sessionData = await res.json();
+        
+        // Switch to chat view
+        appState.currentSessionId = sessionData.id;
         showSection('chat-section');
-        await loadSession(activeSessionId);
-        const userVisibleMessage = `I want to talk about my journal entry titled "${entry.title}". Can you help me reflect on it?`;
-        const hiddenContext = `The user wants to discuss a journal entry.\nTitle: ${entry.title}\nContent:\n${entry.content}`;
-        // We'll add this to the chat on the backend for context.
-        handleSendMessage(); // This will need modification on the backend to accept context. For now, it just starts the conversation.
+        DOMElements.chatMessages.innerHTML = ''; // Clear old messages
+        renderMessage(sessionData.initial_message);
     }
+
+    // --- HEATMAP LOGIC ---
+    async function loadHeatmapView() {
+        if (!appState.heatmapMap) {
+            // Initialize Map (Dark Minimalist style for "Global Vibe")
+            appState.heatmapMap = L.map('heatmap-container', {
+    minZoom: 2,
+    maxZoom: 12 // <--- This prevents zooming in past "City Level"
+}).setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
+            }).addTo(appState.heatmapMap);
+        }
+
+        // Fetch Data
+        const res = await apiFetch('/api/heatmap');
+        const data = await res.json();
+
+        // Clear existing markers (naive approach for demo)
+        appState.heatmapMap.eachLayer((layer) => {
+            if (layer instanceof L.CircleMarker) appState.heatmapMap.removeLayer(layer);
+        });
+
+        const colors = {
+            "Happy": "#FFD700", "Calm": "#4CAF50", "Anxious": "#9C27B0",
+            "Sad": "#2196F3", "Angry": "#F44336", "Neutral": "#B0BEC5"
+        };
+
+        data.forEach(p => {
+            L.circleMarker([p.lat, p.lng], {
+                radius: 6,
+                fillColor: colors[p.mood] || colors["Neutral"],
+                color: "#000",
+                weight: 0,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(appState.heatmapMap);
+        });
+    }
+
+    // --- SETTINGS LOGIC ---
+    async function loadSettingsView() {
+        const res = await apiFetch('/api/profile');
+        const data = await res.json();
+        DOMElements.userProfileTextarea.value = data.profile_info;
+        DOMElements.oldPinInput.value = '';
+        DOMElements.newPinInput.value = '';
+    }
+
+    DOMElements.saveProfileBtn.onclick = async () => {
+        const info = DOMElements.userProfileTextarea.value;
+        const res = await apiFetch('/api/profile', { method: 'POST', body: { profile_info: info } });
+        if(res.ok) alert("Profile updated. BigSister will remember this.");
+        else alert("Failed to update profile.");
+    };
+
+    DOMElements.changePinBtn.onclick = async () => {
+        const old_pin = DOMElements.oldPinInput.value;
+        const new_pin = DOMElements.newPinInput.value;
+        if(new_pin.length !== 4) return alert("New PIN must be 4 digits.");
+        const res = await apiFetch('/api/pin', { method: 'PUT', body: { old_pin, new_pin } });
+        if(res.ok) { alert("PIN changed successfully."); DOMElements.oldPinInput.value = ""; DOMElements.newPinInput.value = ""; }
+        else alert("Failed to change PIN. Check your old PIN.");
+    };
     
     // --- OTHER SECTIONS (RESTORED) ---
     function renderResources() {
@@ -394,10 +629,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSaveMyMessage() {
         const text = DOMElements.myMessageTextarea.value.trim();
         if (!text) { alert('Message cannot be empty.'); return; }
-        const r = await apiFetch('/api/community/message', { method: 'POST', body: { message_text: text } });
-        const d = await r.json();
-        DOMElements.myMessageStatus.textContent = `Status: ${d.status}. ${d.reason || ''}`;
-        loadCommunityView(); // Refresh the wall to show the new message if approved
+        toggleLoading(DOMElements.saveMyMessageBtn, true, "Reviewing...");
+        try {
+            const r = await apiFetch('/api/community/message', { method: 'POST', body: { message_text: text } });
+            const d = await r.json();
+            DOMElements.myMessageStatus.textContent = `Status: ${d.status}. ${d.reason || ''}`;
+            loadCommunityView(); // Refresh the wall to show the new message if approved
+        } catch (e) {
+            console.error(e);
+        } finally {
+            toggleLoading(DOMElements.saveMyMessageBtn, false);
+        }
     }
     
     // --- INITIALIZATION ---
@@ -409,10 +651,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 const sectionId = e.target.dataset.section;
                 showSection(sectionId);
+                // Trigger specific view loaders
                 if (sectionId === 'chat-section') loadChatView();
                 if (sectionId === 'journal-section') loadJournalView();
+                if (sectionId === 'heatmap-section') loadHeatmapView();
                 if (sectionId === 'community-section') loadCommunityView();
-                if (sectionId === 'settings-section') { /* Add logic for settings */ }
+                if (sectionId === 'settings-section') loadSettingsView();
             });
         });
         DOMElements.showSignupLink.addEventListener('click', () => { DOMElements.loginBox.classList.add('hidden'); DOMElements.signupBox.classList.remove('hidden'); });
@@ -427,7 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.deleteJournalBtn.addEventListener('click', deleteJournalEntry);
         DOMElements.reflectJournalBtn.addEventListener('click', reflectOnJournalEntry);
         DOMElements.saveMyMessageBtn.addEventListener('click', handleSaveMyMessage);
-        [DOMElements.tosLink, DOMElements.privacyLink].forEach(l => l.addEventListener('click', (e) => { e.preventDefault(); DOMElements.tosModal.style.display = 'flex'; }));
+        [DOMElements.tosLink, DOMElements.tosLinkInline, DOMElements.privacyLink].forEach(l => {
+            if(l) l.addEventListener('click', (e) => { e.preventDefault(); DOMElements.tosModal.style.display = 'flex'; });
+        });
         DOMElements.closeTosModalBtn.addEventListener('click', () => DOMElements.tosModal.style.display = 'none');
         window.addEventListener('click', (e) => { if (e.target == DOMElements.tosModal) DOMElements.tosModal.style.display = 'none'; });
         DOMElements.pinInputs.forEach((input, index) => { input.addEventListener('keydown', (e) => { if (e.key >= 0 && e.key <= 9) { setTimeout(() => { if (index < 3) DOMElements.pinInputs[index + 1].focus(); }, 10); } else if (e.key === 'Backspace') { setTimeout(() => { if (index > 0) DOMElements.pinInputs[index - 1].focus(); }, 10); } }); });

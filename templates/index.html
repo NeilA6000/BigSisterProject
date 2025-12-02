@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BigSister - Your Anonymous Support</title>
+    <title>BigSister - Your Safe Space</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -19,6 +19,7 @@
             <ul class="nav-links">
                 <li><a href="#" data-section="chat-section" data-translate-key="nav_chat">Chat</a></li>
                 <li><a href="#" data-section="journal-section" data-translate-key="nav_journal">Journal</a></li>
+                <li><a href="#" data-section="heatmap-section" data-translate-key="nav_heatmap">Global Vibe</a></li>
                 <li><a href="#" data-section="community-section" data-translate-key="nav_community">Community</a></li>
                 <li><a href="#" data-section="mind-matters-section" data-translate-key="nav_mind_matters">Mind Matters</a></li>
                 <li><a href="#" data-section="resources-section" data-translate-key="nav_resources">Resources</a></li>
@@ -52,6 +53,13 @@
                     <h1 data-translate-key="signup_title">Create Your Private Account</h1>
                     <p data-translate-key="signup_subtitle">Choose a username and a 4-digit PIN.</p>
                     <input type="text" id="signup-username" placeholder="Username" data-translate-key="username_placeholder">
+                    
+                    <!-- TOS CHECKBOX -->
+                    <div class="tos-checkbox-container">
+                        <input type="checkbox" id="signup-tos">
+                        <label for="signup-tos">I agree to the <a href="#" id="tos-link-inline">Terms of Service</a></label>
+                    </div>
+
                     <button id="signup-btn" class="cta-button" data-translate-key="signup_btn">Sign Up</button>
                     <p id="signup-error" class="error-message"></p>
                     <a href="#" id="show-login" data-translate-key="show_login_link">Already have an account? Login.</a>
@@ -98,7 +106,7 @@
             </div>
         </section>
 
-        <!-- Journal Section (RESTORED reflect button)-->
+        <!-- Journal Section -->
         <section id="journal-section" class="hidden">
             <h1 data-translate-key="journal_title">Private Journal</h1>
             <div class="journal-layout">
@@ -109,6 +117,23 @@
                 <div id="journal-editor-container">
                     <h3 id="editor-heading">New Entry</h3>
                     <input type="text" id="journal-title" placeholder="Entry Title">
+                    
+                    <!-- NEW LOCATION FIELD -->
+                    <!-- REPLACE the "journal-location" input with this: -->
+<div class="location-picker-wrapper">
+    <p style="font-size: 0.9rem; margin-bottom: 0.5rem; opacity: 0.8;">Tap the map to pin your location (Optional)</p>
+    <div id="picker-map"></div>
+</div>
+                    
+                    <select id="journal-mood">
+                        <option value="Neutral">How are you feeling?</option>
+                        <option value="Happy">Happy / Energetic</option>
+                        <option value="Calm">Calm / Peaceful</option>
+                        <option value="Anxious">Anxious / Stressed</option>
+                        <option value="Sad">Sad / Lonely</option>
+                        <option value="Angry">Frustrated / Angry</option>
+                    </select>
+
                     <textarea id="journal-content" placeholder="Write what's on your mind..."></textarea>
                     <div class="editor-buttons">
                         <button id="save-journal-btn" class="cta-button">Save Entry</button>
@@ -116,6 +141,20 @@
                         <button id="reflect-journal-btn" class="cta-button secondary-btn hidden">Reflect with BigSister</button>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <!-- HEATMAP SECTION -->
+        <section id="heatmap-section" class="hidden">
+            <h1>Global Vibe Check</h1>
+            <p>See how the world is feeling. Each light represents a journal entry from someone, somewhere. You are not alone.</p>
+            <div id="heatmap-container"></div>
+            <div class="legend">
+                <span style="color: #FFD700">● Happy</span>
+                <span style="color: #4CAF50">● Calm</span>
+                <span style="color: #9C27B0">● Anxious</span>
+                <span style="color: #2196F3">● Sad</span>
+                <span style="color: #F44336">● Frustrated</span>
             </div>
         </section>
 
@@ -156,28 +195,6 @@
             <div id="resource-list" class="resource-grid"></div>
         </section>
         
-        <!-- Emergency Section (RESTORED) -->
-        <section id="emergency-section" class="hidden">
-            <h1>Location-Based Emergency Resources</h1>
-            <p>If you're in immediate danger, please call 911 (or your local emergency number).</p>
-            <div class="location-finder">
-                <div class="emergency-controls">
-                    <select id="place-type-filter">
-                        <option value="mental_health">Mental Health Support</option>
-                        <option value="hospital">Hospitals</option>
-                        <option value="police">Police Stations</option>
-                    </select>
-                    <button id="find-nearby-btn" class="cta-button"><i class="fas fa-map-marker-alt"></i> Find Help Near Me</button>
-                </div>
-                <div id="location-status"><p>Select a service type and click the button to find help on the map.</p></div>
-                <div id="map"></div>
-                <div id="emergency-results-container" class="hidden">
-                    <h3>Results</h3>
-                    <div id="emergency-results" class="resource-grid"></div>
-                </div>
-            </div>
-        </section>
-
         <!-- Settings Section -->
         <section id="settings-section" class="hidden">
             <h1>Settings</h1>
@@ -185,6 +202,8 @@
                 <div class="setting-card">
                     <h3>Change Your PIN</h3>
                     <p>Your 4-digit PIN protects your journal and your account access.</p>
+                    <input type="password" id="old-pin" placeholder="Old PIN" maxlength="4">
+                    <input type="password" id="new-pin" placeholder="New PIN" maxlength="4">
                     <button id="change-pin-btn" class="cta-button">Change PIN</button>
                 </div>
                 <div class="setting-card">
@@ -201,7 +220,7 @@
             <div class="about-container">
                 <img src="{{ url_for('static', filename='img/BigSister.png') }}" alt="BigSister Logo" class="about-logo">
                 <h1>About BigSister</h1>
-                <p>Big Sister is a personal project that grew out of my passion for supporting mental health through technology...</p>
+                <p>Big Sister is a personal project designed to bring warmth, encouragement, and emotional support to anyone who needs a safe space.</p>
             </div>
         </section>
     </main>
@@ -212,7 +231,7 @@
 
     <!-- Modals (PIN & TOS) -->
     <div id="pin-modal" class="modal"><div class="modal-content"><h2 id="pin-modal-title"></h2><p id="pin-modal-prompt"></p><div class="pin-input-area"><input type="password" class="pin-input" maxlength="1"><input type="password" class="pin-input" maxlength="1"><input type="password" class="pin-input" maxlength="1"><input type="password" class="pin-input" maxlength="1"></div><p id="pin-error" class="error-message"></p><div class="modal-buttons"><button id="pin-submit-btn" class="cta-button"></button><button id="pin-cancel-btn" class="cta-button secondary-btn">Cancel</button></div></div></div>
-    <div id="tos-modal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 data-translate-key="tos_title">Terms of Service & Privacy</h2><div class="modal-body"><p><strong data-translate-key="tos_last_updated">Last Updated: October 2024</strong></p><p data-translate-key="tos_purpose_text">BigSister is an AI chatbot designed for compassionate mental and emotional health support...</p></div></div></div>
+    <div id="tos-modal" class="modal"><div class="modal-content"><span class="close-button">&times;</span><h2 data-translate-key="tos_title">Terms of Service & Privacy</h2><div class="modal-body"><p><strong data-translate-key="tos_last_updated">Last Updated: October 2024</strong></p><p data-translate-key="tos_purpose_text">BigSister is an AI chatbot designed for compassionate mental and emotional health support, but this is NO substitute.</p></div></div></div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

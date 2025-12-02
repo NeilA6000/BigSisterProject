@@ -1,8 +1,9 @@
-# FILE: app.py (FINAL, COMPLETE & CORRECTED VERSION)
+# FILE: app.py (FINAL COMPLETE VERSION - UPDATED)
 
 import os
 import re
 import json
+import random
 import unicodedata
 import requests
 import click
@@ -23,6 +24,31 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app, supports_credentials=True)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY")
 
+@app.before_request
+def force_password_each_request():
+    # endpoints that must be reachable without being auto-logged-out
+    whitelist = {
+        'login_site',        # /login GET/POST - site password page
+        'api_login',         # /api/login
+        'api_signup',        # /api/signup
+        'index',             # / (so redirect after login works)
+        'static',            # static files (css/js/img)
+        'check_auth',        # any endpoints that front-end uses to check auth
+        'force_init_db'      # Database reset utility
+    }
+
+    # allow any /api/* route: function names in your file start with "api_"
+    if request.endpoint is None:
+        return
+    if request.endpoint in whitelist:
+        return
+    if request.endpoint.startswith('api_'):
+        return
+
+    # otherwise clear site-password auth
+    session.pop('authenticated', None)
+
+
 # --- DATABASE CONFIGURATION ---
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
@@ -30,64 +56,6 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL or 'sqlite:///' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
-
-
-# --- DATABASE MODELS ---
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    pin_hash = db.Column(db.String(256), nullable=False)
-    profile_info = db.Column(db.Text, nullable=True, default="")
-    sessions = db.relationship('ChatSession', backref='user', lazy=True, cascade="all, delete-orphan")
-    journal_entries = db.relationship('JournalEntry', backref='user', lazy=True, cascade="all, delete-orphan")
-    def set_pin(self, pin): self.pin_hash = generate_password_hash(str(pin))
-    def check_pin(self, pin): return check_password_hash(self.pin_hash, str(pin))
-
-class ChatSession(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    messages = db.relationship('ChatMessage', backref='session', lazy=True, cascade="all, delete-orphan")
-
-class ChatMessage(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    role = db.Column(db.String(20), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_session.id'), nullable=False)
-
-class JournalEntry(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
-class CommunityMessage(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    submitted_by_username = db.Column(db.String(80), nullable=False, unique=True)
-    text = db.Column(db.Text, nullable=False)
-    status = db.Column(db.String(20), nullable=False, default='pending')
-    reason = db.Column(db.Text, nullable=True)
-    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-# --- DECORATORS ---
-def site_password_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'authenticated' not in session:
-            return redirect(url_for('login_site'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def user_login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session: return jsonify({"error": "User authentication required"}), 401
-        return f(*args, **kwargs)
-    return decorated_function
 
 # --- GROQ & PROMPTS ---
 try:
@@ -108,30 +76,243 @@ Core Principles:
 """
 
 SYSTEM_PROMPT_MODERATOR = """
+INHUMANLY STRICT POSITIVITY FILTER – WALL OF SUPPORT
+
 You are an inhumanly strict, safety-obsessed content moderation bot for a "Wall of Support" for teens. Your ONLY function is to protect this space. You have ZERO tolerance for risk. If there is ANY doubt, you will REJECT the message. Your output MUST be a valid JSON object with a "decision" ("APPROVE" or "REJECT") and a "reason".
 
-Your rules are absolute and non-negotiable. REJECT IF THE MESSAGE:
+Rules – REJECT messages if they contain any of the following:
 
-1.  **Contains ANY form of personal information:** Names, locations, schools, social media handles, numbers, emails. NO EXCEPTIONS.
-2.  **Contains ANY crisis or self-harm language:** "suicide," "kill myself," "end it," "hopeless," etc. IMMEDIATE REJECT.
-3.  **Contains ANY negative emotion words:** REJECT words like "sad," "anxious," "depressed," "hurting," "scared," "awful," "terrible." The wall is for POSITIVE support only, not for describing problems.
-4.  **Describes a personal problem:** REJECT messages that say "I feel..." or describe a specific struggle. Messages must be general encouragement FOR OTHERS. Example APPROVE: "You are stronger than you think." Example REJECT: "I was bullied too and it gets better."
-5.  **Gives advice:** REJECT any message that tells someone what to do (e.g., "You should try...", "Talk to someone"). We cannot give unqualified advice.
-6.  **Contains profanity or slurs:** Any curse word, even mild, is an IMMEDIATE REJECT.
-7.  **Is not universally positive and uplifting:** If the message could be misinterpreted as sarcastic, passive-aggressive, or invalidating, REJECT it. It must be 100% pure, simple encouragement.
-8.  **Contains URLs, emojis that could be misused, or weird formatting:** Keep it simple text.
-9.  **Normalizes pain or struggle:** REJECT messages like "It's okay to be sad" or "Stress is normal." While true, this is not the place for it. This wall is for pure positive reinforcement ONLY.
-10. **Is not in English:** REJECT messages in other languages.
-11. **Is too long or complex:** Messages should be short, simple, and easy to understand. Like a fortune cookie message.
+Personal information: Names, locations, schools, social media handles, numbers, emails. NO EXCEPTIONS.
 
-Your task is to be a machine. A filter. Do not be empathetic. Be a ruthless gatekeeper of safety and positivity. If a message is not simple, general, anonymous, and purely positive, it is REJECTED.
+Crisis or self-harm language: "suicide," "kill myself," "end it," "hopeless," etc. IMMEDIATE REJECT.
 
-Example of a PERFECT message to APPROVE: "Sending good vibes your way."
-Example of a message to REJECT: "I know it feels tough right now, but you'll get through it." (Reason: Contains "tough," describes a negative state).
-Another example to REJECT: "Hang in there." (Reason: Too ambiguous, could be misinterpreted).
+Negative emotion words: "sad," "anxious," "depressed," "hurting," "scared," "awful," "terrible," etc.
+
+Descriptions of personal problems: Messages like "I feel…" or "I was…" must be REJECTED. Messages must be general encouragement for others.
+
+Advice: Any message telling someone what to do (e.g., "You should try…") is REJECTED.
+
+Profanity or slurs: Any curse word, even mild, is an IMMEDIATE REJECT.
+
+Not universally positive: Messages that could be misinterpreted as sarcastic, passive-aggressive, or invalidating must be REJECTED.
+
+URLs, emojis, or weird formatting: Only simple text allowed.
+
+Normalizing pain or struggle: REJECT messages like "It’s okay to be sad" or "Stress is normal." Only pure positive reinforcement allowed.
+
+Non-English messages: Only English is allowed.
+
+Too long or complex: Messages should be short, simple, and easy to understand, like a fortune cookie message.
+
+Some signals that something is “goofy” or “inappropriate” for your use case:
+
+Excessive intimacy: (“luv”, “baby”, “so yummy”)
+
+Sexual undertones: (“your dih will grow”, “thicc”, “hot”)
+
+Exaggerated affection or roleplay: (“mwah”, “uwu”, “silly goose”)
+
+Nonsense-y praise: (“ur so scrunkly”, “delulu cutie”)
+
+Banned words, anything like it, (trying to avoid it) must be REJECTED. This must be taken seriously. (Dih, dih)
+Output format (JSON):
+
+{
+  "decision": "APPROVE" or "REJECT",
+  "reason": "Explanation for the decision"
+}
+
+
+Examples – APPROVED:
+
+{
+  "decision": "APPROVE",
+  "reason": "Message is short, general, anonymous, and purely positive."
+}
+// "Sending good vibes your way."
+
+{
+  "decision": "APPROVE",
+  "reason": "Message is universally uplifting, safe, and free of personal or negative content."
+}
+// "You are capable of amazing things."
+
+{
+  "decision": "APPROVE",
+  "reason": "Message is short, positive, general, and contains no advice or personal info."
+}
+// "Happiness is all around you."
+
+{
+  "decision": "APPROVE",
+  "reason": "Message is neutral, positive, safe, and universally encouraging."
+}
+// "Keep shining bright today."
+
+{
+  "decision": "APPROVE",
+  "reason": "Message is short, uplifting, and contains no negative or personal elements."
+}
+// "Wishing endless smiles and joy."
+
+
+Examples – REJECTED:
+
+{
+  "decision": "REJECT",
+  "reason": "Contains a negative state."
+}
+// "I know it feels tough right now, but you'll get through it."
+
+{
+  "decision": "REJECT",
+  "reason": "Too ambiguous and could be misinterpreted."
+}
+// "Hang in there."
+
+{
+  "decision": "REJECT",
+  "reason": "Contains personal information."
+}
+// "Hi, I’m Alex from Lincoln High."
+
+{
+  "decision": "REJECT",
+  "reason": "Contains advice."
+}
+// "You should talk to someone."
+
+{
+  "decision": "REJECT",
+  "reason": "Mentions struggle or normalizes pain."
+}
+// "It’s okay to be sad sometimes."
+
+
+Task Summary:
+You are a machine. A filter. Do not be empathetic. Be a ruthless gatekeeper of safety and positivity. If a message is not general, anonymous, and purely positive, it is REJECTED.
 """
 
+# --- DATABASE MODELS ---
+class User(db.Model):
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    pin_hash = db.Column(db.String(256), nullable=False)
+    profile_info = db.Column(db.Text, nullable=True, default="")
+    
+    sessions = db.relationship(
+        'ChatSession',
+        backref='user',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+    journal_entries = db.relationship(
+        'JournalEntry',
+        backref='user',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+    def set_pin(self, pin):
+        self.pin_hash = generate_password_hash(str(pin))
+
+    def check_pin(self, pin):
+        return check_password_hash(self.pin_hash, str(pin))
+
+
+class ChatSession(db.Model):
+    __tablename__ = 'chat_sessions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    messages = db.relationship(
+        'ChatMessage',
+        backref='session',
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+
+class ChatMessage(db.Model):
+    __tablename__ = 'chat_messages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    
+    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
+
+
+class JournalEntry(db.Model):
+    __tablename__ = 'journal_entries'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    
+    # NEW FIELDS
+    location = db.Column(db.String(100), nullable=True) # Added Location
+    mood = db.Column(db.String(50), nullable=True, default="Neutral")
+    
+    # For Heatmap (Fake/Obfuscated coords logic in API)
+    lat = db.Column(db.Float, nullable=True)
+    lng = db.Column(db.Float, nullable=True)
+    
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+
+class CommunityMessage(db.Model):
+    __tablename__ = 'community_messages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    submitted_by_username = db.Column(db.String(80), nullable=False, unique=True)
+    text = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    reason = db.Column(db.Text, nullable=True)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+# --- DECORATORS ---
+def site_password_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'authenticated' not in session:
+            return redirect(url_for('login_site'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def user_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session: return jsonify({"error": "User authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_coordinates(place_name):
+    """Converts a city name (e.g. 'Edmonton') into Lat/Lng coordinates."""
+    if not place_name: return None, None
+    try:
+        # We use OpenStreetMap's Nominatim API (free, requires User-Agent)
+        headers = {'User-Agent': 'BigSisterApp/1.0'}
+        url = "https://nominatim.openstreetmap.org/search"
+        response = requests.get(url, params={'q': place_name, 'format': 'json', 'limit': 1}, headers=headers, timeout=5)
+        data = response.json()
+        if data:
+            return float(data[0]['lat']), float(data[0]['lon'])
+    except Exception as e:
+        print(f"Geocoding error: {e}")
+    return None, None
+
 # --- ROUTES ---
+
 
 # SECTION 1: PAGE RENDERING & SITE PASSWORD
 @app.route('/login', methods=['GET', 'POST'])
@@ -149,7 +330,7 @@ def login_site():
 def index():
     return render_template('index.html')
 
-# SECTION 2: USER AUTH API (USERNAME & PIN)
+# SECTION 2: USER AUTH API
 @app.route('/api/signup', methods=['POST'])
 def api_signup():
     data = request.json
@@ -193,15 +374,23 @@ def manage_sessions():
     user_id = session['user_id']
     if request.method == 'POST':
         data = request.json
-        # !!! THIS IS THE CORRECTED, CROSS-PLATFORM DATE FORMAT !!!
         new_s = ChatSession(name=datetime.now().strftime("%b %d, %Y %I:%M %p"), user_id=user_id)
         db.session.add(new_s)
         db.session.flush()
-        prompt = "A user just completed a check-in quiz. Generate a warm, empathetic opening message. Here are their answers:\n" + "\n".join(data.get("quiz_answers", []))
+        
+        # Check if this is a Quiz Start or a Reflection Start
+        if "reflection_context" in data:
+            # Reflection Mode
+            prompt = f"The user is reflecting on a previous journal entry. Please help them process these thoughts. {data['reflection_context']}"
+        else:
+            # Quiz Mode
+            prompt = "A user just completed a check-in quiz. Generate a warm, empathetic opening message. Here are their answers:\n" + "\n".join(data.get("quiz_answers", []))
+            
         try:
             completion = client.chat.completions.create(messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}], model="openai/gpt-oss-120b", temperature=0.8)
             greeting = completion.choices[0].message.content
         except Exception: greeting = "Hello. I'm here to listen."
+        
         initial_msg = ChatMessage(role='assistant', content=greeting, session_id=new_s.id)
         db.session.add(initial_msg)
         db.session.commit()
@@ -258,21 +447,50 @@ def api_chat():
 def manage_journal():
     if request.method == 'POST':
         data = request.json
-        entry = JournalEntry(title=data.get('title'), content=data.get('content'), user_id=session['user_id'])
+        
+        # Get coordinates directly from the map click
+        lat = data.get('lat')
+        lng = data.get('lng')
+
+        # If user didn't click map, default to None (will not show on heatmap)
+        # Or you can keep the random NYC logic here if you REALLY want a default.
+        if lat is None or lng is None:
+             lat = None
+             lng = None
+
+        entry = JournalEntry(
+            title=data.get('title'),
+            content=data.get('content'),
+            mood=data.get('mood', 'Neutral'),
+            lat=lat,
+            lng=lng,
+            user_id=session['user_id']
+        )
         db.session.add(entry)
         db.session.commit()
-        return jsonify({"id": entry.id, "title": entry.title, "timestamp": entry.timestamp.isoformat()}), 201
+        return jsonify({"id": entry.id, "title": entry.title, "mood": entry.mood, "timestamp": entry.timestamp.isoformat()}), 201
+    
     entries = JournalEntry.query.filter_by(user_id=session['user_id']).order_by(JournalEntry.timestamp.desc()).all()
-    return jsonify([{"id": e.id, "title": e.title, "timestamp": e.timestamp.isoformat()} for e in entries])
+    return jsonify([{"id": e.id, "title": e.title, "mood": e.mood, "location": e.location, "content": e.content, "timestamp": e.timestamp.isoformat()} for e in entries])
 
 @app.route('/api/journal/<int:entry_id>', methods=['GET', 'PUT', 'DELETE'])
 @user_login_required
 def manage_journal_entry(entry_id):
     entry = JournalEntry.query.get_or_404(entry_id)
     if entry.user_id != session['user_id']: return jsonify({"error": "Unauthorized"}), 403
-    if request.method == 'GET': return jsonify({"id": entry.id, "title": entry.title, "content": entry.content})
+    if request.method == 'GET':
+        return jsonify({
+            "id": entry.id, 
+            "title": entry.title, 
+            "content": entry.content, 
+            "mood": entry.mood,
+            "location": entry.location
+        })
     if request.method == 'PUT':
-        entry.title, entry.content = request.json.get('title'), request.json.get('content')
+        entry.title = request.json.get('title', entry.title)
+        entry.content = request.json.get('content', entry.content)
+        entry.mood = request.json.get('mood', entry.mood)
+        entry.location = request.json.get('location', entry.location)
         db.session.commit()
         return jsonify({"message": "Entry updated."})
     if request.method == 'DELETE':
@@ -280,7 +498,18 @@ def manage_journal_entry(entry_id):
         db.session.commit()
         return jsonify({"message": "Entry deleted."})
 
-# SECTION 5: PROFILE & COMMUNITY API
+# SECTION 5: HEATMAP API
+@app.route('/api/heatmap', methods=['GET'])
+def get_heatmap_data():
+    all_entries = JournalEntry.query.filter(JournalEntry.lat != None).all()
+    heatmap_data = []
+    for entry in all_entries:
+        safe_lat = entry.lat + random.uniform(-0.01, 0.01)
+        safe_lng = entry.lng + random.uniform(-0.01, 0.01)
+        heatmap_data.append({"lat": safe_lat, "lng": safe_lng, "mood": entry.mood})
+    return jsonify(heatmap_data)
+
+# SECTION 6: PROFILE & COMMUNITY API
 @app.route('/api/profile', methods=['GET', 'POST'])
 @user_login_required
 def manage_profile():
@@ -332,19 +561,23 @@ def get_approved_messages():
     approved = CommunityMessage.query.filter_by(status='approved').all()
     return jsonify([msg.text for msg in approved])
 
-# SECTION 6: OTHER RESOURCES (No DB needed)
+# SECTION 7: OTHER RESOURCES
 @app.route('/find-nearby', methods=['POST'])
 def find_nearby():
-    # Placeholder to prevent frontend errors.
     return jsonify([])
 
 # --- FLASK CLI COMMANDS ---
-@app.cli.command("init-db")
-def init_db_command():
-    """Creates the database tables."""
-    with app.app_context(): db.create_all()
-    click.echo("Initialized the database.")
-
+@app.route('/force-init-db')
+def force_init_db():
+    try:
+        with app.app_context():
+            db.create_all()
+        return "✅ Database tables created. You can now use the app."
+    except Exception as e:
+        return f"⚠️ Error: {e}"
+        
 if __name__ == '__main__':
-    with app.app_context(): db.create_all()
+    with app.app_context():
+        db.create_all()
+        print("✅ Database tables ensured.")
     app.run(debug=True)
